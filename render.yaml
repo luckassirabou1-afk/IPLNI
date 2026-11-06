@@ -1,0 +1,61 @@
+services:
+  - type: web
+    name: iplni-api
+    runtime: node
+    region: frankfurt
+    plan: starter
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @iplni/api db:generate && pnpm --filter @iplni/api build
+    preDeployCommand: pnpm --filter @iplni/api db:migrate:deploy
+    startCommand: pnpm --filter @iplni/api start
+    healthCheckPath: /health/ready
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: iplni-db
+          property: connectionString
+      - key: WEB_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: AUTH_RATE_LIMIT_SECRET
+        generateValue: true
+      - key: COURSE_MEDIA_BUCKET
+        sync: false
+      - key: GCS_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURE
+        value: "false"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: DEFAULT_LOCALE
+        value: fr
+      - key: SUPPORTED_LOCALES
+        value: fr,en
+      - key: DEFAULT_CURRENCY
+        value: XOF
+      - key: ORDER_EXPIRATION_HOURS
+        value: "72"
+
+databases:
+  - name: iplni-db
+    databaseName: iplni
+    user: iplni
+    region: frankfurt
+    plan: basic-256mb
+    postgresMajorVersion: "16"

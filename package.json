@@ -1,0 +1,29 @@
+{
+  "name": "iplni",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.8.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @iplni/api --filter @iplni/web dev",
+    "dev:api": "pnpm --filter @iplni/api dev",
+    "dev:web": "pnpm --filter @iplni/web dev",
+    "build": "pnpm --filter @iplni/api --filter @iplni/web build",
+    "lint": "pnpm -r lint && pnpm format:check",
+    "format": "prettier --write \"apps/api/src/**/*.ts\" \"apps/web/src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"apps/api/src/**/*.ts\" \"apps/web/src/**/*.{ts,tsx}\"",
+    "test": "pnpm --filter @iplni/api test",
+    "db:generate": "pnpm --filter @iplni/api db:generate",
+    "db:validate": "pnpm --filter @iplni/api db:validate",
+    "db:setup": "pnpm --filter @iplni/api db:setup",
+    "db:status": "pnpm --filter @iplni/api db:status",
+    "db:migrate": "pnpm --filter @iplni/api db:migrate",
+    "db:studio": "pnpm --filter @iplni/api db:studio"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "eslint": "^9.25.0",
+    "eslint-config-next": "^15.5.28",
+    "typescript": "^5.8.3",
+    "prettier": "^3.5.3"
+  }
+}

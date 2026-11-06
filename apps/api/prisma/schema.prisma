@@ -1,0 +1,495 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum RoleCode {
+  LEARNER
+  TRAINER
+  ADMIN
+}
+
+enum CourseStatus {
+  DRAFT
+  SUBMITTED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LessonType {
+  VIDEO
+  TEXT
+  LIVE
+  RESOURCE
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  EXPIRED
+  CANCELLED
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum PaymentProvider {
+  ORANGE_MONEY
+  MOOV_MONEY
+  CORIS_BANK
+  OTHER
+}
+
+enum PaymentStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  CONFIRMED
+  REJECTED
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+  REVOKED
+}
+
+enum QuizQuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+}
+
+enum CertificateStatus {
+  VALID
+  REVOKED
+}
+
+model User {
+  id                 String     @id @default(uuid()) @db.Uuid
+  fullName           String
+  email              String     @unique
+  phone              String?
+  passwordHash       String?
+  preferredLanguage  String     @default("fr")
+  status             UserStatus @default(PENDING)
+  emailVerifiedAt    DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  roles              UserRole[]
+  sessions           Session[]
+  emailVerification  EmailVerificationToken?
+  googleAccounts     GoogleAccount[]
+  assignedRoles      UserRole[]     @relation("RoleAssigner")
+  createdCourses     Course[]       @relation("CourseCreator")
+  trainerAssignments CourseTrainer[]
+  uploadedAssets     Asset[]
+  orders             Order[]
+  enrollments        Enrollment[]
+  quizAttempts       QuizAttempt[]
+  reviewedPayments   Payment[]      @relation("PaymentReviewer")
+  auditLogs          AuditLog[]     @relation("AuditActor")
+}
+
+model Role {
+  id    String   @id @default(uuid()) @db.Uuid
+  code  RoleCode @unique
+  label String
+  users UserRole[]
+}
+
+model UserRole {
+  userId     String   @db.Uuid
+  roleId     String   @db.Uuid
+  assignedBy String?  @db.Uuid
+  assignedAt DateTime @default(now())
+
+  user     User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     Role  @relation(fields: [roleId], references: [id])
+  assigner User? @relation("RoleAssigner", fields: [assignedBy], references: [id])
+
+  @@id([userId, roleId])
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model GoogleAccount {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  googleAccountId   String   @unique
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @db.Uuid
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model AuthRateLimit {
+  keyHash         String   @id
+  attempts        Int      @default(0)
+  windowStartedAt DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([windowStartedAt])
+}
+
+model Course {
+  id                 String       @id @default(uuid()) @db.Uuid
+  title              String
+  slug               String       @unique
+  description        String
+  languageCode       String       @default("fr")
+  level              String?
+  priceAmount        Int
+  currency           String       @default("XOF")
+  accessDurationDays Int
+  status             CourseStatus @default(DRAFT)
+  reviewNote         String?
+  createdById        String       @db.Uuid
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  creator      User            @relation("CourseCreator", fields: [createdById], references: [id])
+  trainers     CourseTrainer[]
+  modules      LearningModule[]
+  orderItems   OrderItem[]
+  enrollments  Enrollment[]
+  quizzes      Quiz[]
+  liveSessions LiveSession[]
+}
+
+model CourseTrainer {
+  courseId   String   @db.Uuid
+  trainerId  String   @db.Uuid
+  assignedAt DateTime @default(now())
+
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  trainer User   @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, trainerId])
+}
+
+model LearningModule {
+  id          String   @id @default(uuid()) @db.Uuid
+  courseId    String   @db.Uuid
+  title       String
+  description String?
+  position    Int
+  createdAt   DateTime @default(now())
+
+  course       Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons      Lesson[]
+  quizzes      Quiz[]
+  orderItems   OrderItem[]
+  enrollments  Enrollment[]
+
+  @@unique([courseId, position])
+}
+
+model Lesson {
+  id              String    @id @default(uuid()) @db.Uuid
+  moduleId        String    @db.Uuid
+  title           String
+  description     String?
+  type            LessonType
+  position        Int
+  durationSeconds Int?
+  contentText     String?   @db.Text
+  contentAssetId  String?   @db.Uuid
+  isPreview       Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  module       LearningModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  contentAsset Asset?         @relation("LessonContent", fields: [contentAssetId], references: [id])
+  progress     LessonProgress[]
+  quizzes      Quiz[]
+
+  @@unique([moduleId, position])
+}
+
+model Asset {
+  id           String   @id @default(uuid()) @db.Uuid
+  storageKey   String   @unique
+  originalName String
+  mimeType     String
+  sizeBytes    BigInt
+  visibility   String   @default("PRIVATE")
+  uploadedById String   @db.Uuid
+  createdAt    DateTime @default(now())
+
+  uploader     User         @relation(fields: [uploadedById], references: [id])
+  lessons      Lesson[]     @relation("LessonContent")
+  certificates Certificate[]
+}
+
+model Order {
+  id        String      @id @default(uuid()) @db.Uuid
+  reference String      @unique
+  userId    String      @db.Uuid
+  status    OrderStatus @default(PENDING)
+  amount    Int
+  currency  String      @default("XOF")
+  createdAt DateTime    @default(now())
+  expiresAt DateTime
+  paidAt    DateTime?
+  updatedAt DateTime    @updatedAt
+
+  user     User        @relation(fields: [userId], references: [id])
+  items    OrderItem[]
+  payments Payment[]
+}
+
+model OrderItem {
+  id                String   @id @default(uuid()) @db.Uuid
+  orderId           String   @db.Uuid
+  courseId          String   @db.Uuid
+  moduleId          String?  @db.Uuid
+  priceAmount       Int
+  accessDurationDays Int
+  createdAt         DateTime @default(now())
+
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  course      Course         @relation(fields: [courseId], references: [id])
+  module      LearningModule? @relation(fields: [moduleId], references: [id])
+  enrollments Enrollment[]
+
+  @@index([orderId])
+}
+
+model PaymentMethod {
+  id                String          @id @default(uuid()) @db.Uuid
+  provider          PaymentProvider
+  displayName       String
+  accountHolderName String
+  accountReference  String
+  instructions      String?
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([provider, accountReference])
+}
+
+model Payment {
+  id                String        @id @default(uuid()) @db.Uuid
+  orderId           String        @db.Uuid
+  provider          PaymentProvider
+  providerReference String?
+  amount            Int
+  currency          String        @default("XOF")
+  status            PaymentStatus @default(SUBMITTED)
+  submittedAt       DateTime      @default(now())
+  reviewedAt        DateTime?
+  reviewedById      String?       @db.Uuid
+  reviewNote        String?
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  order    Order @relation(fields: [orderId], references: [id])
+  reviewer User? @relation("PaymentReviewer", fields: [reviewedById], references: [id])
+  events   PaymentEvent[]
+
+  @@index([orderId, status])
+  @@index([providerReference])
+  @@index([status, submittedAt])
+  @@unique([provider, providerReference])
+}
+
+model PaymentEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  paymentId       String   @db.Uuid
+  eventType       String
+  externalEventId String?  @unique
+  payloadRedacted Json?
+  receivedAt      DateTime @default(now())
+  processedAt     DateTime?
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+}
+
+model Enrollment {
+  id              String           @id @default(uuid()) @db.Uuid
+  userId          String           @db.Uuid
+  courseId        String           @db.Uuid
+  moduleId        String?          @db.Uuid
+  orderItemId     String?          @db.Uuid
+  status          EnrollmentStatus @default(ACTIVE)
+  enrolledAt      DateTime         @default(now())
+  accessExpiresAt DateTime
+  completedAt     DateTime?
+
+  user         User          @relation(fields: [userId], references: [id])
+  course       Course        @relation(fields: [courseId], references: [id])
+  module       LearningModule? @relation(fields: [moduleId], references: [id])
+  orderItem    OrderItem?    @relation(fields: [orderItemId], references: [id])
+  progress     LessonProgress[]
+  quizAttempts QuizAttempt[]
+  certificates Certificate[]
+
+  @@index([userId, courseId, status])
+  @@index([accessExpiresAt, status])
+}
+
+model LessonProgress {
+  id              String   @id @default(uuid()) @db.Uuid
+  enrollmentId    String   @db.Uuid
+  lessonId        String   @db.Uuid
+  progressSeconds Int      @default(0)
+  completedAt     DateTime?
+  updatedAt       DateTime @updatedAt
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  lesson     Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, lessonId])
+}
+
+model Quiz {
+  id           String   @id @default(uuid()) @db.Uuid
+  title        String
+  courseId     String   @db.Uuid
+  moduleId     String?  @db.Uuid
+  lessonId     String?  @db.Uuid
+  passingScore Int      @default(70)
+  maxAttempts  Int      @default(3)
+  isPublished  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  course    Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module    LearningModule? @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  lesson    Lesson?         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+}
+
+model QuizQuestion {
+  id       String           @id @default(uuid()) @db.Uuid
+  quizId   String           @db.Uuid
+  text     String
+  type     QuizQuestionType
+  points   Int              @default(1)
+  position Int
+
+  quiz    Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options QuizOption[]
+  answers QuizAnswer[]
+
+  @@unique([quizId, position])
+}
+
+model QuizOption {
+  id         String  @id @default(uuid()) @db.Uuid
+  questionId String  @db.Uuid
+  text       String
+  isCorrect  Boolean @default(false)
+  position   Int
+
+  question QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, position])
+}
+
+model QuizAttempt {
+  id           String   @id @default(uuid()) @db.Uuid
+  quizId       String   @db.Uuid
+  userId       String   @db.Uuid
+  enrollmentId String   @db.Uuid
+  score        Int?
+  passed       Boolean  @default(false)
+  startedAt    DateTime @default(now())
+  submittedAt  DateTime?
+
+  quiz       Quiz        @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id])
+  enrollment Enrollment  @relation(fields: [enrollmentId], references: [id])
+  answers    QuizAnswer[]
+}
+
+model QuizAnswer {
+  id         String @id @default(uuid()) @db.Uuid
+  attemptId  String @db.Uuid
+  questionId String @db.Uuid
+  optionIds  Json
+
+  attempt  QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question QuizQuestion @relation(fields: [questionId], references: [id])
+
+  @@unique([attemptId, questionId])
+}
+
+model LiveSession {
+  id         String   @id @default(uuid()) @db.Uuid
+  courseId   String   @db.Uuid
+  title      String
+  startsAt   DateTime
+  endsAt     DateTime
+  timezone   String   @default("Africa/Ouagadougou")
+  meetingUrl String
+  status     String   @default("SCHEDULED")
+  createdAt  DateTime @default(now())
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model Certificate {
+  id           String            @id @default(uuid()) @db.Uuid
+  enrollmentId String            @db.Uuid
+  reference    String            @unique
+  pdfAssetId   String?           @db.Uuid
+  status       CertificateStatus @default(VALID)
+  issuedAt     DateTime          @default(now())
+  revokedAt    DateTime?
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+  pdfAsset   Asset?     @relation(fields: [pdfAssetId], references: [id])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @db.Uuid
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
