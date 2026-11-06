@@ -456,7 +456,7 @@ export default function TrainerDashboardPage() {
                   min={1}
                   max={1095}
                   step={1}
-                  placeholder="90"
+                  defaultValue={365}
                   required
                 />
               </label>

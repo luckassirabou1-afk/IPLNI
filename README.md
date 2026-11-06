@@ -11,7 +11,7 @@ Plateforme e-learning de l'Institut de Promotion des Langues Nationales et Inter
 - `packages/contracts` : contrats partagés à ajouter lorsque les API seront stabilisées.
 - `docs` : décisions d'architecture et règles métier.
 
-Le dépôt est un **socle de développement**, pas encore une plateforme prête à publier. L'interface propose le français et l'anglais ; le choix est mémorisé dans le navigateur et la langue du navigateur est utilisée au premier accès. Le contenu pédagogique saisi par les formateurs (titres, descriptions et leçons) reste dans sa langue d'origine et n'est pas traduit automatiquement. L'inscription/connexion avec vérification d'adresse e-mail, la limitation persistante des tentatives, le tableau de bord apprenant, le catalogue, la déclaration d'un paiement manuel, la validation administrative, la configuration des moyens de paiement, les brouillons de cours formateur et la modération sont reliés à PostgreSQL. Les leçons publiées peuvent contenir du texte, une vidéo MP4/WebM ou un PDF privé dans Google Cloud Storage ; les médias ne sont accessibles qu'aux apprenants disposant d'un accès actif ou d'une leçon d'aperçu. Les formateurs peuvent planifier des visioconférences Jitsi sur leurs formations publiées ; seuls les apprenants avec un accès actif et les formateurs de la formation peuvent rejoindre la salle depuis IPLNI, à partir de 15 minutes avant la session. Le stockage, les quiz et la recette de production doivent encore être configurés.
+La plateforme est fonctionnelle et son build de production est vérifié ; les services hébergés, les secrets et la recette de production restent à configurer. L'interface propose le français et l'anglais ; le choix est mémorisé dans le navigateur et la langue du navigateur est utilisée au premier accès. Le contenu pédagogique saisi par les formateurs (titres, descriptions et leçons) reste dans sa langue d'origine et n'est pas traduit automatiquement. L'inscription/connexion avec vérification d'adresse e-mail, la limitation persistante des tentatives, le tableau de bord apprenant, le catalogue, la déclaration d'un paiement manuel, la validation administrative, la configuration des moyens de paiement, les brouillons de cours formateur et la modération sont reliés à PostgreSQL. Les leçons publiées peuvent contenir du texte, une vidéo MP4/WebM ou un PDF privé dans Google Cloud Storage ; les médias ne sont accessibles qu'aux apprenants disposant d'un accès actif ou d'une leçon d'aperçu. Les formateurs peuvent planifier des visioconférences Jitsi sur leurs formations publiées ; seuls les apprenants avec un accès actif et les formateurs de la formation peuvent rejoindre la salle depuis IPLNI, à partir de 15 minutes avant la session. La plateforme n'émet pas encore de certificats et ne prend pas en charge les quiz.
 
 ## Mise en production : Vercel + Render
 
@@ -45,9 +45,9 @@ Le navigateur appelle l'API par le chemin `/api` du site Vercel. La règle Next.
 - Testez en production inscription/e-mail, connexion et conservation de session, Google OAuth si activé, paiement manuel, modération des formations, import/lecture de média et les URL `/health` et `/health/ready`.
 - Vérifiez les sauvegardes et la restauration PostgreSQL et configurez les alertes/coûts sur les deux fournisseurs avant l'ouverture au public.
 
-Le déploiement nécessite des comptes Vercel, Render et Google Cloud ainsi que les secrets SMTP/GCS et les URL définitives ; cette configuration de dépôt ne crée pas les comptes et ne lance pas un déploiement externe. Le Blueprint sélectionne Frankfurt par défaut et un service/base payants : vérifiez la résidence des données, la disponibilité, les sauvegardes et les tarifs avant de provisionner.
+Décision de lancement : conserver la région Frankfurt et les paliers `starter` (API) et `basic-256mb` (PostgreSQL) définis dans le Blueprint pour une bêta initiale à faible trafic. Ce dimensionnement n'est pas une garantie de haute disponibilité ; vérifier les limites, le coût actuel, les sauvegardes automatiques et une restauration réelle avant d'y conserver des données de production. Augmenter le palier de base de données et de service avant une ouverture à fort trafic ou si les métriques/alertes l'exigent. Les comptes Vercel, Render et Google Cloud, les secrets SMTP/GCS et les domaines doivent être configurés auprès de leurs fournisseurs ; ne jamais placer les secrets dans Git ou dans une conversation.
 
-Les visioconférences utilisent le service public meet.jit.si ; examinez ses conditions et sa politique de confidentialité. La protection IPLNI contrôle l'accès au lien, mais ne rend pas la salle Jitsi elle-même privée. Avant l'ouverture au public, terminez la recette fonctionnelle, la politique de confidentialité/conditions de vente et les procédures de support/remboursement.
+Les visioconférences utilisent le service public meet.jit.si ; la protection IPLNI contrôle l'accès au lien, mais ne rend pas la salle elle-même privée. Pour la bêta, ne pas y partager de données sensibles et prévenir les participants que les liens de salle peuvent être transmis. Une salle privée ou un fournisseur contractuellement approuvé est requis avant d'y traiter des contenus confidentiels. Avant l'ouverture au public et l'acceptation de paiements, publier les mentions légales, la politique de confidentialité, les conditions de vente et la procédure de support/remboursement après validation applicable dans le pays d'exploitation.
 
 ## Prérequis
 
@@ -183,20 +183,23 @@ La migration `20261020140000_trainer_content_workflow` ajoute le texte des leço
 ## Arbitrages métier déjà intégrés au cadrage
 
 - Langues de l'interface : français et anglais.
-- Accès aux formations : durée limitée et définie par formation/module.
+- Durée d'accès par défaut pour les nouvelles formations payantes : 365 jours à compter de la confirmation manuelle du paiement. La durée effectivement configurée sur chaque formation est affichée avant achat ; toute exception est décidée et renseignée par l'administrateur avant publication. Pas de vente par module dans la bêta.
 - Commandes : expiration après 72 heures.
-- Paiement initial : déclaration par l'apprenant puis rapprochement manuel par un administrateur habilité.
-- Remboursement : processus manuel et audité.
-- Titulaire des comptes de paiement : propriétaire, sous réserve de validation juridique/comptable avant production.
-- Quiz : version simple prévue.
+- Paiement : déclaration par l'apprenant, puis rapprochement manuel et audité par un administrateur ; aucun paiement ni accès n'est confirmé automatiquement. Ne publier que des coordonnées vérifiées appartenant à l'entité ou au titulaire légalement autorisé.
+- Remboursement : aucune automatisation. Chaque demande est traitée manuellement, documentée et selon les conditions de vente publiées et le droit applicable ; ne pas accepter de paiements avant leur validation.
+- Gratuité : non prise en charge ; le tarif doit être strictement positif. Ne pas annoncer d'inscription gratuite avant d'avoir conçu et testé ce parcours.
+- Attestations : désactivées tant que les quiz, les critères de réussite et la génération/vérification d'une attestation ne sont pas livrés.
+- Visioconférence : meet.jit.si est limité à des échanges non sensibles et complémentaires ; aucune confidentialité de la salle n'est garantie par l'application.
+- Hébergement de lancement : Frankfurt, API Render `starter`, PostgreSQL `basic-256mb`, avec contrôle des coûts, alertes et restauration vérifiée avant d'y conserver des données réelles.
+- Récupération de compte : pas de récupération autonome livrée ; le support ne communique jamais de mot de passe et suit une procédure de vérification manuelle documentée.
 - Flutter : après validation du Web.
 
 ## Prochaines étapes
 
-1. Valider les décisions métier encore ouvertes (durée d'accès exacte, règles d'attestation, politique d'inscription gratuite).
-2. Ajouter la récupération du compte et surveiller les limitations de connexion.
-3. Configurer et tester le bucket privé GCS et ses règles d'accès sur une préproduction ; renforcer l'accès aux salles live selon les besoins métier, puis ajouter les quiz.
-4. Compléter les espaces formateur (quiz et suivi des apprenants).
-5. Ajouter les contenus pédagogiques, quiz et règles de délivrance des attestations.
-6. Exécuter les tests de sécurité, de restauration et de recette avant production.
+1. Configurer les services Vercel, Render, PostgreSQL, GCS privé et SMTP, puis vérifier `/health`, `/health/ready`, les migrations et la restauration.
+2. Créer et vérifier les comptes de test, configurer un administrateur contrôlé et tester inscription/e-mail, session, paiement manuel, modération et accès aux médias.
+3. Vérifier les coordonnées de paiement, publier les conditions de vente et la politique de remboursement applicables avant d'accepter de vrais paiements.
+4. Surveiller les limites de connexion et définir une procédure de support ; ajouter une récupération de compte autonome avant d'en faire la promesse aux utilisateurs.
+5. Ajouter les quiz et les règles d'attestation avant d'activer ces fonctions ; renforcer la confidentialité des salles live avant d'y partager du contenu sensible.
+6. Faire valider les textes juridiques, la résidence/conservation des données et les tarifs d'hébergement avant l'ouverture publique.
 99
