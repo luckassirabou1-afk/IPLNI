@@ -19,17 +19,20 @@ L'architecture de déploiement prévue est la suivante :
 
 - `apps/web` : Next.js sur **Vercel**.
 - `apps/api` : Express/TypeScript sur **Render**.
-- PostgreSQL : base Render créée avec le Blueprint [`render.yaml`](./render.yaml), région Frankfurt par défaut.
+- PostgreSQL : base externe, à choisir et configurer séparément dans `DATABASE_URL` (par exemple une offre gratuite compatible PostgreSQL).
 - Ressources de cours : bucket **Google Cloud Storage** privé.
 
 Le navigateur appelle l'API par le chemin `/api` du site Vercel. La règle Next.js relaie ces requêtes vers Render (`API_PROXY_TARGET`). Ce proxy de même origine est nécessaire : il conserve le cookie de session `SameSite=Lax` sans l'affaiblir. Ne configurez pas `NEXT_PUBLIC_API_URL` vers le domaine Render ; laissez cette variable absente.
 
-### Déployer l'API et PostgreSQL sur Render
+Le Blueprint Render ne crée que l'API sur l'offre gratuite ; il ne crée ni base de données ni autre ressource payante. Il faut créer/configurer PostgreSQL séparément puis saisir son URL dans `DATABASE_URL`. Les offres gratuites ont des quotas et des limites susceptibles d'évoluer ; l'API Render gratuite peut se mettre en veille et démarrer lentement après une période inactive. Vérifiez les conditions et le récapitulatif de facturation de chaque fournisseur avant de confirmer. Cette configuration ne garantit pas que tous les services annexes seront gratuits.
 
-1. Importez le dépôt dans Render, créez un **Blueprint** à partir de `render.yaml` et vérifiez la région et les coûts du service et de PostgreSQL avant de confirmer. Le Blueprint installe les dépendances, génère Prisma, applique les migrations pendant le pré-déploiement et vérifie `/health/ready`.
-2. Pendant la création, renseignez les variables marquées `sync: false` dans Render. `WEB_URL` et `CORS_ORIGIN` doivent être l'URL HTTPS exacte de production Vercel (origine seulement, sans chemin). `AUTH_RATE_LIMIT_SECRET` est généré par le Blueprint.
-3. Configurez un bucket GCS privé et fournissez dans Render `COURSE_MEDIA_BUCKET` et `GCS_SERVICE_ACCOUNT_JSON`, ce dernier contenant le JSON complet d'un compte de service GCP limité au bucket. Ne commitez jamais cette clé. Configurez l'origine exacte Vercel dans le CORS GCS ; voir [stockage des ressources](./docs/course-media-storage.md).
-4. Configurez SMTP pour l'inscription et la vérification d'adresse e-mail. Google OAuth est facultatif ; si activé, définissez `GOOGLE_REDIRECT_URI` sur `https://<domaine-vercel>/api/v1/auth/google/callback` et enregistrez exactement la même URL dans Google Cloud Console.
+### Déployer l'API sur Render
+
+1. Importez le dépôt dans Render et créez un **Blueprint** à partir de `render.yaml`. Vérifiez que le service `iplni-api` est sur l'offre `free` et qu'aucune ressource payante n'est ajoutée. Le build installe les dépendances, génère Prisma et applique les migrations à la base externe avant de compiler l'API.
+2. Créez une base PostgreSQL auprès d'un fournisseur dont l'offre vous convient, puis définissez `DATABASE_URL` dans Render avec son URL de connexion. Vérifiez les limites, la durée de conservation et les conditions de sauvegarde de cette offre. Gardez cette URL secrète.
+3. Renseignez `WEB_URL` et `CORS_ORIGIN` avec l'URL HTTPS exacte de production Vercel (origine seulement, sans chemin). `AUTH_RATE_LIMIT_SECRET` est généré par le Blueprint.
+4. SMTP est nécessaire pour envoyer les e-mails de vérification. Google OAuth est facultatif ; si activé, définissez `GOOGLE_REDIRECT_URI` sur `https://<domaine-vercel>/api/v1/auth/google/callback` et enregistrez exactement la même URL dans Google Cloud Console.
+5. Le stockage des médias de cours est facultatif pour le déploiement, mais nécessite un bucket GCS et peut entraîner des frais. Sans `COURSE_MEDIA_BUCKET` et `GCS_SERVICE_ACCOUNT_JSON`, les téléversements de vidéos et de documents ne seront pas disponibles. Voir [stockage des ressources](./docs/course-media-storage.md).
 
 ### Déployer le frontend sur Vercel
 
@@ -40,12 +43,12 @@ Le navigateur appelle l'API par le chemin `/api` du site Vercel. La règle Next.
 
 ### Après le premier déploiement
 
-- Créez un compte depuis le site et vérifiez son e-mail, puis attribuez le rôle administrateur depuis le Shell Render avec `IPLNI_ADMIN_EMAIL=<adresse-verifiee> pnpm --filter @iplni/api db:promote-admin`. Ne donnez jamais ce rôle à un compte non contrôlé.
+- Créez un compte depuis le site et vérifiez son e-mail, puis attribuez le rôle administrateur depuis un terminal local configuré avec `DATABASE_URL` et `IPLNI_ADMIN_EMAIL`, en exécutant `pnpm --filter @iplni/api db:promote-admin`. Ne donnez jamais ce rôle à un compte non contrôlé.
 - Connectez-vous comme administrateur et configurez le moyen de paiement Orange Money dans l'espace d'administration ; vérifiez le titulaire et la référence avant d'accepter des paiements.
 - Testez en production inscription/e-mail, connexion et conservation de session, Google OAuth si activé, paiement manuel, modération des formations, import/lecture de média et les URL `/health` et `/health/ready`.
 - Vérifiez les sauvegardes et la restauration PostgreSQL et configurez les alertes/coûts sur les deux fournisseurs avant l'ouverture au public.
 
-Décision de lancement : conserver la région Frankfurt et les paliers `starter` (API) et `basic-256mb` (PostgreSQL) définis dans le Blueprint pour une bêta initiale à faible trafic. Ce dimensionnement n'est pas une garantie de haute disponibilité ; vérifier les limites, le coût actuel, les sauvegardes automatiques et une restauration réelle avant d'y conserver des données de production. Augmenter le palier de base de données et de service avant une ouverture à fort trafic ou si les métriques/alertes l'exigent. Les comptes Vercel, Render et Google Cloud, les secrets SMTP/GCS et les domaines doivent être configurés auprès de leurs fournisseurs ; ne jamais placer les secrets dans Git ou dans une conversation.
+Configuration de lancement à coût minimal : frontend Vercel et API Render sur leurs offres gratuites, avec PostgreSQL externe configuré séparément. Les offres gratuites peuvent avoir des limites, interruptions, démarrages à froid ou des politiques qui changent ; elles ne garantissent ni disponibilité ni sauvegardes adaptées à des données de production. Vérifiez les conditions et les frais éventuels de PostgreSQL, SMTP, Google Cloud Storage et des domaines avant de les activer. Ne placez jamais les secrets dans Git ou dans une conversation.
 
 Les visioconférences utilisent le service public meet.jit.si ; la protection IPLNI contrôle l'accès au lien, mais ne rend pas la salle elle-même privée. Pour la bêta, ne pas y partager de données sensibles et prévenir les participants que les liens de salle peuvent être transmis. Une salle privée ou un fournisseur contractuellement approuvé est requis avant d'y traiter des contenus confidentiels. Avant l'ouverture au public et l'acceptation de paiements, publier les mentions légales, la politique de confidentialité, les conditions de vente et la procédure de support/remboursement après validation applicable dans le pays d'exploitation.
 
@@ -190,13 +193,13 @@ La migration `20261020140000_trainer_content_workflow` ajoute le texte des leço
 - Gratuité : non prise en charge ; le tarif doit être strictement positif. Ne pas annoncer d'inscription gratuite avant d'avoir conçu et testé ce parcours.
 - Attestations : désactivées tant que les quiz, les critères de réussite et la génération/vérification d'une attestation ne sont pas livrés.
 - Visioconférence : meet.jit.si est limité à des échanges non sensibles et complémentaires ; aucune confidentialité de la salle n'est garantie par l'application.
-- Hébergement de lancement : Frankfurt, API Render `starter`, PostgreSQL `basic-256mb`, avec contrôle des coûts, alertes et restauration vérifiée avant d'y conserver des données réelles.
+- Hébergement de lancement : Vercel pour le frontend, Render `free` pour l'API et PostgreSQL configuré séparément ; vérifier les limites et coûts des offres avant le déploiement.
 - Récupération de compte : pas de récupération autonome livrée ; le support ne communique jamais de mot de passe et suit une procédure de vérification manuelle documentée.
 - Flutter : après validation du Web.
 
 ## Prochaines étapes
 
-1. Configurer les services Vercel, Render, PostgreSQL, GCS privé et SMTP, puis vérifier `/health`, `/health/ready`, les migrations et la restauration.
+1. Configurer Vercel, Render, une base PostgreSQL et SMTP ; ajouter GCS uniquement si le stockage des fichiers de cours est requis, puis vérifier `/health`, `/health/ready`, les migrations et la restauration.
 2. Créer et vérifier les comptes de test, configurer un administrateur contrôlé et tester inscription/e-mail, session, paiement manuel, modération et accès aux médias.
 3. Vérifier les coordonnées de paiement, publier les conditions de vente et la politique de remboursement applicables avant d'accepter de vrais paiements.
 4. Surveiller les limites de connexion et définir une procédure de support ; ajouter une récupération de compte autonome avant d'en faire la promesse aux utilisateurs.

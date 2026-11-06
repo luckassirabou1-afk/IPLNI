@@ -3,18 +3,15 @@ services:
     name: iplni-api
     runtime: node
     region: frankfurt
-    plan: starter
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @iplni/api db:generate && pnpm --filter @iplni/api build
-    preDeployCommand: pnpm --filter @iplni/api db:migrate:deploy
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @iplni/api db:generate && pnpm --filter @iplni/api db:migrate:deploy && pnpm --filter @iplni/api build
     startCommand: pnpm --filter @iplni/api start
     healthCheckPath: /health/ready
     envVars:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        fromDatabase:
-          name: iplni-db
-          property: connectionString
+        sync: false
       - key: WEB_URL
         sync: false
       - key: CORS_ORIGIN
@@ -51,11 +48,3 @@ services:
         value: XOF
       - key: ORDER_EXPIRATION_HOURS
         value: "72"
-
-databases:
-  - name: iplni-db
-    databaseName: iplni
-    user: iplni
-    region: frankfurt
-    plan: basic-256mb
-    postgresMajorVersion: "16"
