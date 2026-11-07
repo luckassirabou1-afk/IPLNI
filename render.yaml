@@ -4,8 +4,8 @@ services:
     runtime: node
     region: frankfurt
     plan: free
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @iplni/api db:generate && pnpm --filter @iplni/api db:migrate:deploy && pnpm --filter @iplni/api build
-    startCommand: pnpm --filter @iplni/api start
+    buildCommand: corepack pnpm install --frozen-lockfile && corepack pnpm --filter @iplni/api db:generate && corepack pnpm --filter @iplni/api db:migrate:deploy && corepack pnpm --filter @iplni/api build
+    startCommand: corepack pnpm --filter @iplni/api start
     healthCheckPath: /health/ready
     envVars:
       - key: NODE_ENV
